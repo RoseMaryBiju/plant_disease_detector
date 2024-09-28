@@ -1,1 +1,1 @@
-# plant_disease_detector
+# plants_leave_disease_detector
