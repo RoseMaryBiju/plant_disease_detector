@@ -12,19 +12,37 @@ st.set_page_config(page_title="Plant Disease Classifier", page_icon="🌿", layo
 
 @st.cache_resource
 def load_model():
-    model_url = "https://drive.google.com/file/d/1rKh-IElSdHTqax7XdfSdZTn-r8T_qWPf/view"  # Replace with your actual download link
+    model_url = "https://drive.google.com/uc?export=download&id=1rKh-IElSdHTqax7XdfSdZTn-r8T_qWPf"
     model_path = "downloaded_model.h5"
     
     if not os.path.exists(model_path):
         with st.spinner("Downloading model... This may take a while."):
-            response = requests.get(model_url)
-            with open(model_path, "wb") as f:
-                f.write(response.content)
+            try:
+                response = requests.get(model_url, stream=True)
+                response.raise_for_status()
+                with open(model_path, "wb") as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                st.success("Model downloaded successfully!")
+            except requests.exceptions.RequestException as e:
+                st.error(f"Failed to download the model: {e}")
+                return None
     
-    return tf.keras.models.load_model(model_path)
+    try:
+        model = tf.keras.models.load_model(model_path)
+        return model
+    except (OSError, IOError) as e:
+        st.error(f"Failed to load the model: {e}")
+        st.error("The model file might be corrupted. Please check the download link and try again.")
+        if os.path.exists(model_path):
+            os.remove(model_path)  # Remove the corrupted file
+        return None
 
 # Load the model
 model = load_model()
+
+if model is None:
+    st.stop()  # Stop the app if model loading failed
 
 # Load class indices
 class_indices_path = "class_indices.json"  # Make sure this file is in your repository
