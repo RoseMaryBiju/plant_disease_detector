@@ -12,7 +12,7 @@ st.set_page_config(page_title="Plant Disease Classifier", page_icon="🌿", layo
 
 @st.cache_resource
 def load_model():
-    model_url = "YOUR_DIRECT_DOWNLOAD_LINK"  # Replace with your actual download link
+    model_url = "https://drive.google.com/file/d/1rKh-IElSdHTqax7XdfSdZTn-r8T_qWPf/view"  # Replace with your actual download link
     model_path = "downloaded_model.h5"
     
     if not os.path.exists(model_path):
