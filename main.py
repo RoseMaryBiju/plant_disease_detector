@@ -1,6 +1,7 @@
 import os
 import json
 import requests
+import tempfile
 from PIL import Image
 
 import numpy as np
@@ -13,37 +14,34 @@ st.set_page_config(page_title="Plant Disease Classifier", page_icon="🌿", layo
 @st.cache_resource
 def load_model():
     model_url = "https://drive.google.com/uc?export=download&id=1rKh-IElSdHTqax7XdfSdZTn-r8T_qWPf"
-    model_path = "downloaded_model.h5"
     
-    if not os.path.exists(model_path):
-        with st.spinner("Downloading model... This may take a while."):
-            try:
-                response = requests.get(model_url, stream=True)
-                response.raise_for_status()
-                with open(model_path, "wb") as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        f.write(chunk)
-                st.success("Model downloaded successfully!")
-            except requests.exceptions.RequestException as e:
-                st.error(f"Failed to download the model: {e}")
-                return None
-    
-    try:
-        model = tf.keras.models.load_model(model_path)
-        return model
-    except (OSError, IOError) as e:
-        st.error(f"Failed to load the model: {e}")
-        st.error("The model file might be corrupted. Please check the download link and try again.")
-        if os.path.exists(model_path):
-            os.remove(model_path)  # Remove the corrupted file
-        return None
+    with st.spinner("Downloading model... This may take a while."):
+        try:
+            response = requests.get(model_url)
+            response.raise_for_status()
+            
+            # Save the model to a temporary file
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.h5') as tmp_file:
+                tmp_file.write(response.content)
+                tmp_file_path = tmp_file.name
+            
+            # Load the model using TensorFlow's load_model function
+            model = tf.keras.models.load_model(tmp_file_path)
+            
+            # Remove the temporary file
+            os.unlink(tmp_file_path)
+            
+            st.success("Model loaded successfully!")
+            return model
+        except Exception as e:
+            st.error(f"Failed to load the model: {e}")
+            return None
 
 # Load the model
 model = load_model()
 
 if model is None:
     st.stop()  # Stop the app if model loading failed
-
 # Load class indices
 class_indices_path = "class_indices.json"  # Make sure this file is in your repository
 try:
@@ -53,39 +51,12 @@ except FileNotFoundError:
     st.error(f"Class indices file not found at {class_indices_path}. Please ensure the file exists in the correct location.")
     st.stop()
 
-# Reverse the class indices dictionary
-class_names = {v: k for k, v in class_indices.items()}
-
-def preprocess_image(image):
-    img = image.resize((224, 224))  # Adjust size as needed
-    img_array = np.array(img) / 255.0
-    img_array = np.expand_dims(img_array, axis=0)
-    return img_array
+# Use class_indices directly, no need to reverse it
+class_names = class_indices
 
 def predict_disease(image):
     preprocessed_image = preprocess_image(image)
     prediction = model.predict(preprocessed_image)
     predicted_class = np.argmax(prediction, axis=1)[0]
     confidence = np.max(prediction) * 100
-    return class_names[predicted_class], confidence
-
-# Streamlit UI
-st.title("Plant Disease Classifier")
-
-uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
-
-if uploaded_file is not None:
-    image = Image.open(uploaded_file)
-    st.image(image, caption="Uploaded Image", use_column_width=True)
-    
-    if st.button("Classify Disease"):
-        disease, confidence = predict_disease(image)
-        st.success(f"Predicted Disease: {disease}")
-        st.info(f"Confidence: {confidence:.2f}%")
-
-# Add some information about the app
-st.markdown("""
-    ## About this app
-    This app uses a deep learning model to classify plant diseases based on leaf images.
-    Upload an image of a plant leaf, and the app will predict if the plant is healthy or identify the disease.
-""")
+    return class_names[str(predicted_class)], confidence  # Convert predicted_class to string
